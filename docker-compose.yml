@@ -1,0 +1,49 @@
+# Sportik in Docker.
+#   App only (you already have nginx/Caddy/Traefik on the server):
+#       docker compose up -d --build            -> http://127.0.0.1:8787, proxy your HTTPS domain to it
+#   App + built-in HTTPS via Caddy (ports 80/443 must be free, DOMAIN must point to this server):
+#       docker compose --profile caddy up -d --build
+name: sportik
+
+services:
+  app:
+    build:
+      context: .
+      # deploy/Dockerfile.prebuilt for servers with little RAM (client built beforehand)
+      dockerfile: ${DOCKERFILE:-Dockerfile}
+      args:
+        BASE_PATH: ${BASE_PATH:-/}
+    image: sportik:latest
+    container_name: sportik
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_PATH: /app/data/sportik.db
+      PORT: "8787"
+    volumes:
+      - sportik_data:/app/data
+    ports:
+      - "127.0.0.1:${APP_PORT:-8787}:8787"
+
+  caddy:
+    image: caddy:2.10
+    container_name: sportik-caddy
+    profiles: ["caddy"]
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  # SQLite database with all workouts. Back it up:
+  #   docker compose cp app:/app/data/sportik.db ./backup-$(date +%F).db
+  sportik_data:
+  caddy_data:
+  caddy_config:
